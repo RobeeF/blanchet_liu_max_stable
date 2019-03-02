@@ -2,7 +2,7 @@
 """
 Created on Wed Feb  6 16:34:41 2019
 
-@author: robin
+@author: Robin Fuchs
 """
 
 import numpy as np
@@ -15,10 +15,20 @@ import numpy.linalg as nl
 #===========================================================
 
 def g(n):
+    ''' Survival function of L: g(n)=P(L>=n) 
+    n (positive int): random variable taking value in N*
+    -----------------------------------------------------------------------
+    returns (float in (0,1)): the probability that L>=N  
+    '''
     return 1/n*np.log(n+np.exp(1)-1)*np.log(np.log(n+np.exp(np.exp(1))-1))
 
 def simulate_L(nb_iter=100, epsilon=10**(-6)):
-    ''' Simulate L thanks to MC generalized inversion technique'''
+    ''' Simulate L by Monte Carlo generalized inversion technique and dichotomic search 
+    - nb_iter (int): The maximum number of iterations of the dichotomic search algorithm
+    - epsilon (small valued float): Stop criterion 
+    --------------------------------------------------------------------------
+    returns: (positive int): L  
+    '''
     u = np.random.uniform(high=1,low=0,size=1)[0]
     INF_search = 0 
     SUP_search = 10**20
@@ -26,12 +36,12 @@ def simulate_L(nb_iter=100, epsilon=10**(-6)):
     L = (SUP_search + INF_search)/2
     while nb_iter>=0: 
         g_n = g(L)
-        if (g_n - u <-epsilon/2): # a in [-inf,-epsilon/2]
+        if (g_n - u <-epsilon/2): # L has to decrease in the next iteration
             SUP_search = L
-        elif (g_n - u > epsilon/2): # a in [epsilon/2, inf]
+        elif (g_n - u > epsilon/2): # L has to increase in the next iteration
             INF_search = L
-        else: #a in [-epsilon/2,epsilon/2]: convergence
-            return int(np.floor(L))
+        else: # Convergence was reached
+            return int(np.floor(L)) # Maybe ceil or round is more relevant than floor
         nb_iter-=1
         
         L = (INF_search+SUP_search)/2
@@ -41,7 +51,14 @@ def simulate_L(nb_iter=100, epsilon=10**(-6)):
     
 
 def compute_V_x(x,cov,L):
-    a = compute_a(cov, 0.05) # Take delta equal to 0.05 while it has no influence
+    ''' Computes the Malliavin-Thalmaier estimator 
+    - x (1xd array): The point at which the density has to be evaluated
+    - cov (dxd ndarray): Variance-covariance matrix of the random fields
+    - L (positive int): The number of M estimations used to compute the estimator
+    --------------------------------------------------------------------------
+    returns: (float): V_x  
+    '''
+    a = compute_a(cov, 0.05) # Take delta equal to 0.05 
     
     d = cov.shape[0]
     w_d= math.pi**(float(d)/2)/math.gamma(float(d)/2 + 1) # Sphere of a d-dimensional ball
@@ -75,21 +92,31 @@ def compute_V_x(x,cov,L):
     # As W_0=0 we insert it at the beginning of the sequence
     W_0_to_L = np.insert(W_1_to_L,0,0)
     
-    # Return W_n - W_{n-1} for all n in 1,..., L
+    # Return Sum(W_n - W_{n-1}) for all n in 1,..., L
     return (((W_0_to_L[1:] - W_0_to_L[:-1]))/g_1_to_L).sum()  
 
 
 def compute_f_hat_b(x, b, cov, conf_lvl=.05):
+    '''Estimates the f density at point x with a computational budget of b. 
+        Also returns the confidence intervals at 1-conf_lvl %
+    - x (1xd array): The point at which the density has to be evaluated
+    - b (positive int): The computational budget
+    - cov (dxd ndarray): Variance-covariance matrix of the random fields
+    - conf_lvl (float in (0,1)): The level of the confidence interval
+    --------------------------------------------------------------------------
+    returns: (float in (0,1)): ^f_b(x)  
+    '''
     n = 0
     Tn = 0    
     V_x = []
     
-    while Tn<=b:
+    while Tn<=b:# While the budget is not reached
         L = simulate_L()
         V_x.append(compute_V_x(x,cov,L))
         Tn+=L+n
         n+=1
-    B = n
+        
+    B = n # B is equal to biggest n such that Tn<=b, i.e. equal to the n at which the previous loop stopped
     f_hat_x_b = np.sum(V_x)/B
     CI = compute_confidence_interval(V_x,f_hat_x_b, b, conf_lvl)
     return f_hat_x_b, CI
@@ -98,7 +125,15 @@ def compute_f_hat_b(x, b, cov, conf_lvl=.05):
 # Confidence interval
 #===========================================================
 def compute_confidence_interval(V_x, f_hat_x_b, b, conf_lvl): 
+    ''' Compute the confidence interval of the estimation of the density
+    - V_x (float): The Malliavin-Thalmaier estimator value 
+    - f_hat_x_b(float in (0,1)): The estimation of f(x)
+    - b (positive int): The computational budget
+    - conf_lvl (float in (0,1)): The level of the confidence interval 
+    --------------------------------------------------------------------------
+    returns: (tuple): The bounds of the interval 
+    '''
     s_hat_square = np.square(V_x-f_hat_x_b).mean()
     a_b = np.sqrt(np.log(np.log(np.log(b)))/b)
     quant = np.quantile(V_x,1-conf_lvl/2) # Empirical quantile
-    return [f_hat_x_b - quant*np.sqrt(s_hat_square*a_b), f_hat_x_b + quant*np.sqrt(s_hat_square*a_b) ]
+    return (f_hat_x_b - quant*np.sqrt(s_hat_square*a_b), f_hat_x_b + quant*np.sqrt(s_hat_square*a_b))
