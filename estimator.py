@@ -72,7 +72,7 @@ def compute_V_x(x,cov,L):
 
     for i in range(L):
         print(i,' eme simulation')
-        M,X,N = algorithm_M(a, cov)
+        M,X,N = algorithm_M(a, cov, x)
         M_minus_x = M - x
         M_minus_x_L.append(M_minus_x)
         numerator_L.append(np.dot(np.dot(X,inv_cov),M_minus_x.T).sum())
@@ -111,6 +111,7 @@ def compute_f_hat_b(x, b, cov, conf_lvl=.05):
     V_x = []
     
     while Tn<=b:# While the budget is not reached
+        print("Remaining buget: ", b-Tn)
         L = simulate_L()
         V_x.append(compute_V_x(x,cov,L))
         Tn+=L+n
