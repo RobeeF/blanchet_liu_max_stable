@@ -8,7 +8,7 @@ Created on Sat Apr  6 11:46:29 2019
 import os 
 os.chdir('C:/Users/robin/Documents/GitHub/blanchet_liu_max_stable')
 
-from simulate_M import simul_Xk
+from simulate_M import simul_Xk, simulate_An
 import numpy as np 
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -73,9 +73,13 @@ dist_list = [np.linalg.norm(coord[0])] + dist_list
 
 dist_mtx = dist_matrix(coord)
 
+
 #============================================================
 # Matern-Whithney kernel: integrate the square distance
 #============================================================
+
+
+
 d = M.shape[1]
 
 min_M_emp = np.min(M,axis=0)
@@ -167,7 +171,7 @@ for params in params_grid:
     cdf_dist[str(params)] = np.mean(cdf_dist[str(params)])
 
 # Define a threshold to keep only the 5% of the lowest distance associated parameters
-accept_threshold = np.quantile(list(cdf_dist.values()), 0.10)
+accept_threshold = np.quantile(list(cdf_dist.values()), 0.15)
 
 params_distrib = []
 for params in params_grid:
@@ -216,3 +220,36 @@ for x in x_grid:
         
 x_coords,y_coords = x_grid[:,0], x_grid[:,1]
 plt.hist2d(x_coords, y_coords, weights=emp_cdf_density, cmap=plt.cm.BuPu)
+
+#====================================================================================================
+# Matern-Whithney kernel: Testing the approach
+#====================================================================================================
+def simul_M(seq_len, cov):
+    ''' Approximately simulate M according to its definition (by ) '''
+    d = cov.shape[0]
+    An = simulate_An(seq_len)
+    Xn = np.random.multivariate_normal(size=seq_len, mean=np.full(d,0), cov=cov)
+    return np.max(-np.log(np.stack([An]*Xn.shape[1]).T) + Xn, axis=0) 
+
+x = x_grid[4]
+
+M_simu = []
+for i in range(5000):
+    print(i)
+    M_simu.append(simul_M(100000, rho(dist_mtx, 1,10)))
+
+M_simu2_np = np.stack(M_simu)
+M_simu_np.shape
+
+M_simu_np = np.append(M_simu_np, M_simu2_np, axis=0)
+M_simu_np = np.stack(M_simu) 
+pd.DataFrame(M_simu_np).to_csv("simu_M_25000.csv")
+
+M_simu_np.shape
+
+M_df[M_df>np.full(d,90)].shape
+x = np.full(d, 7)
+cdf(M_simu,x)
+
+X = np.random.multivariate_normal(size=50000, mean=np.full(d,0), cov=rho(dist_mtx, 1,10))
+np.exp(-(np.mean(np.max(np.exp(X-x), axis=1))))
