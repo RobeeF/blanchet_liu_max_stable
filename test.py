@@ -25,8 +25,9 @@ d=3
 delta = 0.05
 gamma =0.5
 
-t = [1/3,1/3,1/3]
-cov = cov_brownian_X(t)
+t = [1/3,2/3,3/3]
+dist = [1/3,1/3,1/3]
+cov = cov_brownian_X(dist) # Probleme with the new t
 bar_sigma = np.sqrt(max(np.diag(cov)))
 a = 0.5#compute_a(cov, delta)
 no = compute_no(a,bar_sigma,d)
@@ -36,30 +37,40 @@ no = compute_no(a,bar_sigma,d)
 #===========================================================
 ### Check NA
 S = algorithm_S_NA()
-S_NA = sample_without_record(S[-1],1000)
+S_NA = sample_without_record(S[-1],50)
 
 n_gamma = gamma*np.arange(1,len(S+S_NA)+1)
 A_NA = n_gamma - (S+S_NA)
 
-pd.Series(A_NA).plot() # Check that Sn for all n in [NA,N] is negative OK
-pd.Series(n_gamma).plot()
-N_A = len(S)
 print(N_A)
+plt.figure(figsize=(7,3))
+plt.plot(A_NA, lw=2)
+plt.plot(n_gamma, lw=2)
+plt.title("For n>NA, Sn= gamma*n-An<0")
+plt.xlabel("n")
+plt.ylabel("Value")
+plt.legend(["An", "n*gamma"])
+plt.tight_layout()
 
 ### Check N_a  
 a = compute_a(cov, delta) # a=0.5
 
-a=0.5
 A1 = simulate_An(1)[0]
 X1 = simul_Xk(t, size=1) # Generate  
-print(X1, A1)
 
 N_a = compute_Na(d,cov,a,A1,X1)
-print(N_a)
 n = np.arange(max(N_a-100,0),N_a+100)
 
-pd.Series(n*gamma).plot()
-pd.Series(A1*np.power(n,a)*np.exp(nl.norm(X1, ord=np.inf))).plot()
+print(N_a)
+plt.figure(figsize=(7,3))
+plt.plot(A1*np.power(n,a)*np.exp(nl.norm(X1, ord=np.inf)), lw=2)
+plt.plot(n*gamma, lw=2)
+plt.title("For n>Na, n*gamma > A1*n^a*exp(||X1||inf)...")
+plt.xlabel("n")
+plt.ylabel("Value")
+plt.legend(["A1*n^a*exp(||X1||)", "n*gamma"])
+plt.tight_layout()
+
 # gamma*n> A_1*(n^a)*exp(||X_1||inf) for n>Na : OK
 
 ### Check N_X
@@ -96,6 +107,54 @@ for i in range(10000):
 distrib_L_without_tail = pd.Series(L_sample).value_counts()[:50]
 (pd.Series(distrib_L_without_tail)/np.sum(distrib_L_without_tail)).plot()
 
+
+#============================================================
+# Check the Cramer's root computation
+#============================================================
+A1 = np.random.poisson(1, size=(100000)) 
+S1 = 1/2 - A1  
+theta = compute_theta()
+np.mean(np.exp(theta*S1))
+
+# OK
+
+
+#====================================================================================
+# Verify the length of the downcrossing segment compared to the whole segment length
+#====================================================================================
+
+downc = np.array(sample_downcrossing(0))
+# Implemented a warning
+
+#====================================================================================
+# Same thing for the upcrossing segment
+#====================================================================================
+
+simulate_An(5, Ao=0, LAMBDA=100)
+while  str(np.array(sample_upcrossing(-1))) == 'degenerated':
+    pass
+upcross = np.array(sample_upcrossing(-1))
+Sn = simulate_S(So=-10, LAMBDA=1+theta)
+
+# Problem fixed with an error raised
+
+#=============================================
+# Test with sample without record
+#=============================================
+sample_without_record(-3,10)
+
+#=============================================
+# Test with sample without record
+#=============================================
+up_down_seq = algorithm_S_NA()
+up_down_seq
+pd.Series(up_down_seq).plot()
+
+#=============================================
+# Full S algo
+#=============================================
+up_down_seq = algorithm_S_NA()
+algorithm_S_NA_to_N(up_down_seq,10)
 
 #===========================================================
 # How does a vary with delta?
@@ -169,3 +228,11 @@ with open('M_1580_simul_070319.pkl', 'wb') as fichier:
 with open('M_1580_simul_070319.pkl', 'rb') as fichier:
         mon_depickler = pickle.Unpickler(fichier)
         output_depickled = mon_depickler.load()
+    
+#============================================================
+# Schema explicatif 
+#============================================================        
+
+fake_Sn = [0,1,3,2,-2, -1, -3, -2, -3, -2, 1, 2, 4, 1, -5, -2, -4, -3, -2, -2, -1,-2,-3,-3,-2]   
+pd.Series(fake_Sn).plot() 
+    

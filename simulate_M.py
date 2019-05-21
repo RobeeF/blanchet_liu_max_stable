@@ -16,7 +16,7 @@ import numpy.linalg as nl
 # Compute useful constants and utilities
 #===========================================================
     
-def compute_theta(Ao=0, LAMBDA=1, gamma=.5, nb_iter=100, epsilon=10**(-15)): # Not working
+def compute_theta(Ao=0, LAMBDA=1, gamma=.5, nb_iter=100, epsilon=10**(-10)): # Not working
     ''' Compute the Cramer's root that will be used to simulate a Poisson process with unit rate 1+theta
    - Ao (int): The starting point of the Poisson process
    - LAMBDA (float): The Poisson process rate
@@ -29,7 +29,7 @@ def compute_theta(Ao=0, LAMBDA=1, gamma=.5, nb_iter=100, epsilon=10**(-15)): # N
     
     INF_search = 0 
     SUP_search = 100
-    NB_SAMPLE = 10000
+    NB_SAMPLE = 20000
     
     theta = (SUP_search + INF_search)/2
     
@@ -38,7 +38,7 @@ def compute_theta(Ao=0, LAMBDA=1, gamma=.5, nb_iter=100, epsilon=10**(-15)): # N
         A1 = Ao + np.random.poisson(1, size=(NB_SAMPLE)) 
         S1 = -A1 + gamma 
         
-        cond = np.abs(np.exp((theta*S1)).mean(axis=0)-1) # Approximate the expectation by a mean over NB_SAMPLE samples
+        cond = np.exp((theta*S1)).mean(axis=0) # Approximate the expectation by a mean over NB_SAMPLE samples
 
         if (cond-1 <-epsilon/2): # E(exp(theta*S1))-1 in [-inf,-epsilon/2]
             INF_search = theta
@@ -51,7 +51,7 @@ def compute_theta(Ao=0, LAMBDA=1, gamma=.5, nb_iter=100, epsilon=10**(-15)): # N
         theta = (INF_search+SUP_search)/2
     return theta
 
-def compute_a(cov, delta, Ao=0, LAMBDA=1, gamma=.5, nb_iter=500, epsilon=10**(-3)):
+def compute_a(cov, delta, Ao=0, LAMBDA=1, gamma=.5, nb_iter=500, epsilon=10**(-3),default_mode=True):
     ''' Compute the parameter value of a, as in the paper page 18 thanks to a dichotomic search algorithm
     - cov (dxd ndarray): Variance-covariance matrix of the random fields
     - delta (float in (0,1)): Some unknown parameter from the paper [10]
@@ -60,6 +60,7 @@ def compute_a(cov, delta, Ao=0, LAMBDA=1, gamma=.5, nb_iter=500, epsilon=10**(-3
     - gamma (float in (0,1)): parameter of the random Walk chosen such that gamma < E(A_1)
     - nb_iter (int): The maximum number of iterations of the dichotomic search algorithm
     - epsilon (small valued float): Stop criterion 
+    - default_mode: return 0.5 as in the slides of the paper
     --------------------------------------------------------------------------
     returns: (float in (0,1)): a  
     '''
@@ -77,6 +78,9 @@ def compute_a(cov, delta, Ao=0, LAMBDA=1, gamma=.5, nb_iter=500, epsilon=10**(-3
     X1_norm_max = nl.norm(X1, ord=np.inf,axis=1) 
     
     A1 = Ao + np.random.poisson(LAMBDA, size=(NB_SAMPLE)) # Simulate NB_SAMPLE A1 realisation
+    
+    if default_mode:
+        return 0.5
     
     while nb_iter>=0:    
         right_hand_side = np.mean(A1*np.exp(X1_norm_max)/gamma,axis=0)**(1/(1-a)) # Right hand side of the equation page 18
@@ -207,7 +211,7 @@ def simulate_An(length, Ao=0, LAMBDA=1):
     return  Ao + np.random.poisson(LAMBDA, size=length).cumsum() 
 
 
-def simulate_S(length=500, So=0, LAMBDA=1, gamma=.5):
+def simulate_S(length=5000, So=0, LAMBDA=1, gamma=.5):
     ''' Compute a random walk of size length
     - length (positive int): size of the Poisson process to simulate
     - Ao (int): The starting point of the Random Walk process
@@ -216,7 +220,7 @@ def simulate_S(length=500, So=0, LAMBDA=1, gamma=.5):
     -----------------------------------------------------------------------------------------------    
     returns (1xlength array): S1, ..., Sn (and not So) 
     '''
-    An = simulate_An(length=length,Ao=-So,LAMBDA=LAMBDA) # Compute An
+    An = simulate_An(length=length,Ao=0-So,LAMBDA=LAMBDA) # Compute An. Ao = 0.5*0 - So
     return (gamma*np.arange(1,length+1) - An) # Check right shape
 
 
@@ -228,26 +232,39 @@ def sample_downcrossing(x):
     returns (1xtau_minus array): S1, ..., S_{tau_minus}, with tau_minus The lowest n such that Sn<0  
     '''
     Sn = simulate_S(So=x, LAMBDA=1)
-    tau_minus = np.argmax(Sn<0) 
+    if(any(Sn<0)):
+        tau_minus = np.argmax(Sn<0) 
+    else:
+         #tau_minus = len(Sn)
+         raise ValueError("Max of the length of S reached") # Temporary warning
+    
     return Sn[:tau_minus+1].tolist()
 
-def sample_upcrossing(x):
+def sample_upcrossing(x, gamma=0.5):
     ''' Simulate a upcrossing segment from a random Walk S with a non-negative drift
     - x (int): Starting point of the upcrossing segment
     -----------------------------------------------------------------------------------------------    
     returns (1xtau_plus array): S1, ..., S_{tau_plus}, with tau_plus The lowest n such that Sn>0 
     '''
     theta = compute_theta()
-    Sn = simulate_S(So=x, LAMBDA=1+theta)
+    Sn = simulate_S(So=x, LAMBDA=1- gamma*theta)
+    
+    if(any(Sn>=0)): 
+        S = Sn[:np.argmax(Sn>=0)+1] 
+    else: # If the sequence generated is not long enough to sample in 
+        #S = Sn
+        raise ValueError('tau+ infinite, upcrossing segment might not be accurate')
 
-    S = Sn[:np.argmax(Sn>=0)+1] 
     u = np.random.uniform(high=1,low=0,size=1)[0]
     
     #print("cond", np.exp(-theta*(S[-1]-x)))
     if u<np.exp(-theta*(S[-1]-x)):
+        #print(S.tolist())
         return S.tolist()
     else:
         return 'degenerated'
+    
+        
 
 
 def algorithm_S_NA(): 
@@ -277,7 +294,7 @@ def sample_without_record(x,l):
     -----------------------------------------------------------------------
     returns (1xl array): S_{N_A+1}, ..., S_N
     '''
-    S = simulate_S(length=l, So=0, LAMBDA=1) 
+    S = simulate_S(length=l, So=x, LAMBDA=1) 
     while (np.max(S)>=0) or (sample_upcrossing(S[-1])!='degenerated'): # Triggers a useless warning
         S = simulate_S(length=l, So=x, LAMBDA=1)
     return S.tolist()
@@ -302,7 +319,7 @@ def algorithm_S_NA_to_N(S,l):
 
 def simul_Xk(t, size=1):
     ''' Simulates a multivariate centered brownian motion of step dt=1 starting at (0,...,0). 
-    - cov (dxd ndarray): Variance-covariance matrix of the random fields, with d is the dimension of the multivariate process.
+    - t (array): The coordinate of the locations on the line
     - size (positive int): The length of the process to simulate
     ----------------------------------------------------------------------------
     returns: (sizexd ndarray): The multivariate Brownian motion of size <size> 
@@ -310,7 +327,7 @@ def simul_Xk(t, size=1):
     # Generate the sequence of multivariate_gaussian of size "size"
     nb_points = len(t)
     dx = [t[0]] + [t[i+1]-t[i] for i in range(nb_points-1)] # range is now including the right bound
-    
+    #print(dx)
     r = multivariate_normal.rvs(cov=np.diag(dx), size=(size))
     
     if size>1:

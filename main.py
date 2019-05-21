@@ -25,7 +25,7 @@ cov = cov_brownian_X(dist) # For standard brownian motion
 #===========================================================
 
 # Computational budget setting:
-b = 10**2
+b = 50**1
 # Takes forever to run because of infinite-like loop:
 # The estimation is also erroneous certainly due to delta and theta
 compute_f_hat_b(t, b, cov, conf_lvl=.05)
